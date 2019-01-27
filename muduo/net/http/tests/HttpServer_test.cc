@@ -3,6 +3,10 @@
 #include <muduo/net/http/HttpResponse.h>
 #include <muduo/net/EventLoop.h>
 #include <muduo/base/Logging.h>
+#include <muduo/base/AsyncLogging.h>
+
+#include <sys/resource.h>
+#include <unistd.h>
 
 #include <iostream>
 #include <map>
@@ -12,6 +16,12 @@ using namespace muduo::net;
 
 extern char favicon[555];
 bool benchmark = false;
+off_t kRollSize = 500*1000*1000;
+muduo::AsyncLogging* g_asyncLog = NULL;
+void asyncOutput(const char* msg, int len)
+{
+  g_asyncLog->append(msg, len);
+}
 
 void onRequest(const HttpRequest& req, HttpResponse* resp)
 {
@@ -22,19 +32,19 @@ void onRequest(const HttpRequest& req, HttpResponse* resp)
     for (const auto& header : headers)
     {
       std::cout << header.first << ": " << header.second << std::endl;
+      LOG_INFO << "Hello 0123456789" << " abcdefghijklmnopqrstuvwxyz ";
     }
   }
 
   if (req.path() == "/")
   {
-    string s ="<a href=\"http://www.baidu.com\">baidu</a>";//当输入字符串字面常量存在“时，需要用转义字符进行转化
     resp->setStatusCode(HttpResponse::k200Ok);
     resp->setStatusMessage("OK");
     resp->setContentType("text/html");
     resp->addHeader("Server", "Muduo");
     string now = Timestamp::now().toFormattedString();
     resp->setBody("<html><head><title>This is title</title></head>"
-        "<body>" +  s +
+        "<body><h1>Hello</h1>Now is " + now +
         "</body></html>");
   }
   else if (req.path() == "/favicon.ico")
@@ -70,6 +80,12 @@ int main(int argc, char* argv[])
     numThreads = atoi(argv[1]);
   }
   EventLoop loop;
+  char name[256] = { 0 };
+  strncpy(name, argv[0], sizeof name - 1);
+  muduo::AsyncLogging log(::basename(name), kRollSize);
+  log.start();
+  g_asyncLog = &log;
+  muduo::Logger::setOutput(asyncOutput);
   HttpServer server(&loop, InetAddress(8000), "dummy");
   server.setHttpCallback(onRequest);
   server.setThreadNum(numThreads);
